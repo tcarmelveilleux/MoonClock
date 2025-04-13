@@ -166,7 +166,10 @@ class MoonClock:
     _, height, _, dy = font.get_bounding_box()
     font.load_glyphs(msg)
 
-    disp = self.display
+    if isinstance(self, MoonClock):
+      disp = self.display
+    else:
+      disp = self
 
     for y in range(height):
         x = sx
