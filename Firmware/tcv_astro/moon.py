@@ -4,6 +4,7 @@ from tcv_astro.polynomial import poly_eval
 from tcv_astro.angles import sin_degrees, cos_degrees, asin_degrees, atan2_degrees, degrees_to_hms, degrees_to_dms, ecliptic_to_equatorial
 from tcv_astro.ecliptic import nutation_simplified_meeus
 from tcv_astro.utils import package_relpath
+from tcv_astro.sun import solar_coordinates_low_accuracy_meeus
 import struct
 from io import BytesIO
 
@@ -166,3 +167,14 @@ def lunar_coordinates_high_accuracy_meeus(jd: float) -> LunarCoordinates:
 
 def lunar_coordinates(jd: float) -> LunarCoordinates:
     return lunar_coordinates_high_accuracy_meeus(jd)
+
+
+def lunar_age_normalized_28_days(jd: float) -> float:
+    """Return the lunar age normalized over 28 days instead of 29.53 days, which helps to show/understand quarter/half better."""
+    solar_pos = solar_coordinates_low_accuracy_meeus(jd)
+    lunar_pos = lunar_coordinates_high_accuracy_meeus(jd)
+
+    moon_age_days: float = ((lunar_pos.true_lon - solar_pos.true_lon) % 360.0) / 12.1907
+    normalized_to_28_days = (moon_age_days / 29.530575) * 28.0
+
+    return normalized_to_28_days
