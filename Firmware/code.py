@@ -1,6 +1,8 @@
 from moonclock_board import MoonClock
+from tcv_astro.angles import hours_to_hms
 from tcv_astro import moon, sun
 from tcv_astro import julian, polynomial
+from tcv_astro.event_times import get_event_time, get_sun_positions_for_event, get_moon_positions_for_event, RiseTransitSetTimes
 from adafruit_datetime import datetime, timedelta
 from adafruit_max7219.matrices import CustomMatrix
 import array
@@ -21,6 +23,16 @@ NUM_SECONDS_TO_RESET_DISPLAY = 127
 
 def debug_print(*args):
   print(*args)
+
+class RiseSetEvent:
+  def __init__(self, moment: datetime, is_rise: bool):
+    self.moment: datetime = moment
+    self.is_rise: bool = is_rise
+
+class RiseSetTimes:
+  def __init__(self, rise_time: datetime, set_time: datetime):
+    self.rise_time = rise_time
+    self.set_time = set_time
 
 
 def get_date_of_nth_weekday_of_month(year: int, month: int, weekday: int, num: int) -> int:
@@ -147,21 +159,25 @@ class MoonClockSettings:
 
     return timedelta(hours=0)
 
-  def to_local_time(self, now_datetime: datetime) -> datetime:
-    local_datetime_before_dst = now_datetime + timedelta(seconds=self.settings_dict["utc_offset_seconds"])
+  def to_local_time(self, now_utc_datetime: datetime) -> datetime:
+    local_datetime_before_dst = now_utc_datetime + timedelta(seconds=self.settings_dict["utc_offset_seconds"])
     dst_offset = self.get_dst_hours_delta(local_datetime_before_dst)
     local_datetime = local_datetime_before_dst + dst_offset
 
     return local_datetime
+
+  def to_utc_time(self, now_local_datetime: datetime) -> datetime:
+    dst_offset = self.get_dst_hours_delta(now_local_datetime)
+    utc_datetime = now_local_datetime - dst_offset
+    utc_datetime -= timedelta(seconds=self.settings_dict["utc_offset_seconds"])
+
+    return utc_datetime
 
   def get_local_time(self) -> datetime:
     now = self.moon_clock.rtc.datetime
     now_datetime = datetime(now.tm_year, now.tm_mon, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec)
 
     return self.to_local_time(now_datetime)
-
-  def get_local_struct_time(self, now_datetime: datetime) -> time.struct_time:
-    return self.to_local_time(now_datetime).timetuple()
 
   def get_jd(self) -> float:
     now = self.moon_clock.rtc.datetime
@@ -205,8 +221,83 @@ class AstroDataComputer:
     normalized_to_28_days = moon.lunar_age_normalized_28_days(jd=self._settings.get_jd())
     self.set_phase_dial_to_days(normalized_to_28_days)
 
+  def events_for_current_day(self, local_time: datetime, events: list[RiseSetEvent]) -> RiseSetTimes:
+    rise_time = None
+    set_time = None
+
+    for event in events:
+      if event.is_rise and (local_time.date() == event.moment.date()):
+        rise_time = event.moment
+        break
+
+    for event in events:
+      if not event.is_rise and (local_time.date() == event.moment.date()):
+        set_time = event.moment
+        break
+
+    return RiseSetTimes(rise_time, set_time)
+
+
+  def time2str(self, moment: datetime) -> str:
+    if moment is None:
+      return "----"
+
+    return "{:02}:{:02}".format(moment.hour, moment.minute)
+
   def process_rise_set(self, local_time: datetime):
-    pass
+    utc_time = self._settings.to_utc_time(local_time)
+
+    sun_events = []
+    moon_events = []
+
+    utc = utc_time - timedelta(days=2)
+    for _ in range(4):
+        gc.collect()
+        print(gc.mem_free())
+        jd = julian.date_to_julian_day(utc.year, utc.month, utc.day)
+
+        obs_lat = self._settings.settings_dict.get('latitude_millionths', 0) / 1e6
+        obs_lon = self._settings.settings_dict.get('longitude_millionths', 0) / 1e6
+
+        # ====== SUN ======
+        sun_positions = get_sun_positions_for_event(jd)
+        moon_positions = get_moon_positions_for_event(jd)
+
+        sun_event_times: RiseTransitSetTimes = get_event_time(jd, object_positions=sun_positions, obs_lat_degrees=obs_lat, obs_lon_degrees=obs_lon)
+        moon_event_times: RiseTransitSetTimes = get_event_time(jd, object_positions=moon_positions, obs_lat_degrees=obs_lat, obs_lon_degrees=obs_lon)
+
+        sun_rise_hms = hours_to_hms(sun_event_times.rise_time_hours)
+        sun_set_hms = hours_to_hms(sun_event_times.set_time_hours)
+
+        local_sun_rise_time = self._settings.to_local_time(datetime(utc.year, utc.month, utc.day, sun_rise_hms.hours, sun_rise_hms.minutes, int(sun_rise_hms.seconds)))
+        local_sun_set_time = self._settings.to_local_time(datetime(utc.year, utc.month, utc.day, sun_set_hms.hours, sun_set_hms.minutes, int(sun_set_hms.seconds)))
+
+        moon_rise_hms = hours_to_hms(moon_event_times.rise_time_hours)
+        moon_set_hms = hours_to_hms(moon_event_times.set_time_hours)
+
+        local_moon_rise_time = self._settings.to_local_time(datetime(utc.year, utc.month, utc.day, moon_rise_hms.hours, moon_rise_hms.minutes, int(moon_rise_hms.seconds)))
+        local_moon_set_time = self._settings.to_local_time(datetime(utc.year, utc.month, utc.day, moon_set_hms.hours, moon_set_hms.minutes, int(moon_set_hms.seconds)))
+
+        sun_events.append(RiseSetEvent(moment=local_sun_rise_time, is_rise=True))
+        sun_events.append(RiseSetEvent(moment=local_sun_set_time, is_rise=False))
+        moon_events.append(RiseSetEvent(moment=local_moon_rise_time, is_rise=True))
+        moon_events.append(RiseSetEvent(moment=local_moon_set_time, is_rise=False))
+
+        utc += timedelta(days=1)
+
+    gc.collect()
+    print(gc.mem_free())
+    sun_rise_set = self.events_for_current_day(local_time, sun_events)
+    moon_rise_set = self.events_for_current_day(local_time, moon_events)
+
+    self._sun_local_rise_time = sun_rise_set.rise_time
+    self._sun_local_set_time = sun_rise_set.set_time
+
+    self._moon_local_rise_time = moon_rise_set.rise_time
+    self._moon_local_set_time = moon_rise_set.set_time
+
+    print("{}/{} Sun: rise {} set {}".format(local_time.month, local_time.day, self.time2str(self._sun_local_rise_time), self.time2str(self._sun_local_set_time)))
+    print("{}/{} Moon: rise {} set {}".format(local_time.month, local_time.day, self.time2str(self._moon_local_rise_time), self.time2str(self._moon_local_set_time)))
 
   def process_moonless_hours(self, local_time: datetime):
     pass
@@ -219,6 +310,23 @@ class AstroDataComputer:
       self.process_moonless_hours(local_time)
 
     self.update_lunar_phase(now)
+
+  @property
+  def moon_local_rise_time(self) -> datetime:
+      return self._moon_local_rise_time
+
+  @property
+  def moon_local_set_time(self) -> datetime:
+      return self._moon_local_set_time
+
+  @property
+  def sun_local_rise_time(self) -> datetime:
+      return self._sun_local_rise_time
+
+  @property
+  def sun_local_set_time(self) -> datetime:
+      return self._sun_local_set_time
+
 
 class Screen:
   def __init__(self, display: CustomMatrix):
@@ -287,8 +395,10 @@ class TextDisplayScreen(Screen):
     # HACK: Display with fake MAX7219 dies at random
     self._num_seconds_refresh += 1
     if self._num_seconds_refresh == NUM_SECONDS_TO_RESET_DISPLAY:
+      self._num_seconds_refresh = 0
       self._display.init_display()
       self._display.clear_all()
+      self._display.show()
 
     self._display.display_text(3, 0, self._strings[self._current_idx])
     self._display.show()
@@ -317,15 +427,16 @@ class LocalTimeScreen(TextDisplayScreen):
     super().__init__(display, settings, num_elements=1)
 
   def compute_strings(self, local_time: datetime):
-    t = self._settings.get_local_struct_time(local_time)
+    t = local_time.timetuple()
     self._strings[0] = "{:02}:{:02}:{:02}".format(t.tm_hour, t.tm_min, t.tm_sec)
 
 class DateScreen(TextDisplayScreen):
   def __init__(self, display: CustomMatrix, settings: MoonClockSettings):
     super().__init__(display, settings, num_elements=1)
+    self._months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
   def compute_strings(self, local_time: datetime):
-    self._strings[0] = "date"
+    self._strings[0] = "{} {}".format(self._months[local_time.month - 1], local_time.day)
 
 class MoonRiseSetScreen(TextDisplayScreen):
   def __init__(self, display: CustomMatrix, settings: MoonClockSettings, astro_computer: AstroDataComputer):
@@ -333,8 +444,9 @@ class MoonRiseSetScreen(TextDisplayScreen):
     self._astro_computer = astro_computer
 
   def compute_strings(self, local_time: datetime):
-    self._strings[0] = "moonrise"
-    self._strings[1] = "moonset"
+    ac = self._astro_computer
+    self._strings[0] = "MR:%s" % (ac.time2str(ac.moon_local_rise_time))
+    self._strings[1] = "MS:%s" % (ac.time2str(ac.moon_local_set_time))
 
 class SunRiseSetScreen(TextDisplayScreen):
   def __init__(self, display: CustomMatrix, settings: MoonClockSettings, astro_computer: AstroDataComputer):
@@ -342,8 +454,9 @@ class SunRiseSetScreen(TextDisplayScreen):
     self._astro_computer = astro_computer
 
   def compute_strings(self, local_time: datetime):
-    self._strings[0] = "sunrise"
-    self._strings[1] = "sunset"
+    ac = self._astro_computer
+    self._strings[0] = "SR:%s" % (ac.time2str(ac.sun_local_rise_time))
+    self._strings[1] = "SS:%s" % (ac.time2str(ac.sun_local_set_time))
 
 class ScreenStateMachine:
   STATE_UI = 0
@@ -427,7 +540,6 @@ class MoonClockFirmware:
     self.settings.load_settings()
 
     self.astro_data_computer = AstroDataComputer(self.moon_clock, self.settings)
-
     self.state_machine = ScreenStateMachine(self.moon_clock, self.settings, self.astro_data_computer)
 
   def loop(self):
