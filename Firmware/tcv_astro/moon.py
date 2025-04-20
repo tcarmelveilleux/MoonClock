@@ -8,6 +8,15 @@ from tcv_astro.sun import solar_coordinates_low_accuracy_meeus
 import struct
 from io import BytesIO
 
+# Give us a chance to run GC on circuitpython
+try:
+    import gc
+    def run_gc():
+        gc.collect()
+except:
+    def run_gc():
+        pass
+
 class LunarCoordinates:
     def __init__(self, true_lon: float, ra_apparent: float, dec_apparent: float, horizontal_parallax_degrees: float, distance_km: float):
         """Initialize lunar coordinates from arguments
@@ -132,6 +141,7 @@ def lunar_coordinates_high_accuracy_meeus(jd: float) -> LunarCoordinates:
     # The sums Sigma1, SigmaR, SigmaB are the core values used by the algorithm.
     sigma1 = sum_table45(table45_bytes, TBL_IDX_SIGMA1, m_corrector, D, M, Mprime, F)
     sigma1 += (3958.0 * sin_degrees(A1)) + (1962.0 * sin_degrees(Lprime - F)) + (318.0 * sin_degrees(A2))
+    run_gc()
 
     sigmar = sum_table45(table45_bytes, TBL_IDX_SIGMAR, m_corrector, D, M, Mprime, F)
 
@@ -141,6 +151,7 @@ def lunar_coordinates_high_accuracy_meeus(jd: float) -> LunarCoordinates:
 
     # Make the big blob garbage-collectable once done.
     table45_bytes = None
+    run_gc()
 
     # Geocentric latitude of the center of the moon
     moon_lambda = (Lprime + (sigma1 / 1e6)) % 360.0

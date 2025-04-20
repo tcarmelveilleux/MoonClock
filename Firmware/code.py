@@ -1,20 +1,21 @@
 from moonclock_board import MoonClock
 from tcv_astro.angles import hours_to_hms
-from tcv_astro import moon, sun
+from tcv_astro import moon
+from tcv_astro.polynomial import linear_interp_in_parts
 from tcv_astro import julian, polynomial
 from tcv_astro.event_times import get_event_time, get_sun_positions_for_event, get_moon_positions_for_event, RiseTransitSetTimes
 from adafruit_datetime import datetime, timedelta
 from adafruit_max7219.matrices import CustomMatrix
-import array
-import gc
-import json
-import re
-import os
-import storage
-import supervisor
+
 import time
-import rtc
-import adafruit_gps
+# Give us a chance to run GC on circuitpython
+try:
+    import gc
+    def run_gc():
+        gc.collect()
+except:
+    def run_gc():
+        pass
 
 CHANNEL_MOON_PHASE = 0
 CHANNEL_MOONLESS_HOURS = 1
@@ -23,6 +24,31 @@ NUM_SECONDS_TO_RESET_DISPLAY = 127
 
 def debug_print(*args):
   print(*args)
+
+def pt(l, t):
+  debug_print("{} {:02}/{:02} {:02}:{:02}".format(l, t.month, t.day, t.hour, t.minute))
+
+
+MOONLESS_HOURS_POINTS = [
+  (0, 410),
+  (0.25, 610),
+  (0.5, 800),
+  (1.0, 1000),
+  (1.5, 1180),
+  (1.75, 1380),
+  (2.0, 1570),
+  (2.25, 1775),
+  (2.5, 1965),
+  (2.75, 2160),
+  (3.0, 2355),
+  (3.25, 2560),
+  (3.5, 2750),
+  (3.75, 2950),
+  (4.0, 3150),
+  (4.25, 3355),
+  (4.5, 3555),
+]
+
 
 class RiseSetEvent:
   def __init__(self, moment: datetime, is_rise: bool):
@@ -184,7 +210,6 @@ class MoonClockSettings:
     jd = julian.date_to_julian_day(now.tm_year, now.tm_mon, now.tm_mday) + julian.time_to_fraction(now.tm_hour, now.tm_min, now.tm_sec)
     return jd
 
-
 class AstroDataComputer:
   def __init__(self, moon_clock: MoonClock, settings: MoonClockSettings):
     OLD_DATE = datetime(1970, 1, 1)
@@ -193,12 +218,19 @@ class AstroDataComputer:
 
     self._last_full_day_process_time: datetime = OLD_DATE
 
-    self._moon_local_rise_time: datetime = OLD_DATE
-    self._moon_local_set_time: datetime = OLD_DATE
-    self._sun_local_rise_time: datetime = OLD_DATE
-    self._sun_local_set_time: datetime = OLD_DATE
+    self._moon_rise_time: datetime = OLD_DATE
+    self._moon_set_time: datetime = OLD_DATE
+
+    self._next_moon_rise_time: datetime = OLD_DATE
+    self._next_moon_set_time: datetime = OLD_DATE
+
+    self._sun_rise_time: datetime = OLD_DATE
+    self._sun_set_time: datetime = OLD_DATE
 
     self._settings = settings
+    self._normalized_moon_age = 0.0
+
+    self._moonless_hours = 0.0
 
     self._last_moon_age: float = 0.0
 
@@ -213,12 +245,18 @@ class AstroDataComputer:
     self._moon_clock.dac_driver.load_dac_value(CHANNEL_MOON_PHASE, value)
     self._moon_clock.dac_driver.latch_dacs()
 
+  def set_moonless_hours_dial(self, moonless_hours: float):
+    value = int(linear_interp_in_parts(moonless_hours, MOONLESS_HOURS_POINTS))
+    self._moon_clock.dac_driver.load_dac_value(CHANNEL_MOONLESS_HOURS, value)
+    self._moon_clock.dac_driver.latch_dacs()
+
   def update_lunar_phase(self, now: float):
     if (now - self._last_moon_age) < self.LUNAR_PHASE_UPDATE_PERIOD_SECONDS:
       return
 
     self._last_moon_age = now
     normalized_to_28_days = moon.lunar_age_normalized_28_days(jd=self._settings.get_jd())
+    self._normalized_moon_age = normalized_to_28_days
     self.set_phase_dial_to_days(normalized_to_28_days)
 
   def events_for_current_day(self, local_time: datetime, events: list[RiseSetEvent]) -> RiseSetTimes:
@@ -244,14 +282,14 @@ class AstroDataComputer:
 
     return "{:02}:{:02}".format(moment.hour, moment.minute)
 
-  def process_rise_set(self, local_time: datetime):
+  def process_rise_set(self, local_time: datetime, is_today: bool):
     utc_time = self._settings.to_utc_time(local_time)
 
     sun_events = []
     moon_events = []
 
-    utc = utc_time - timedelta(days=2)
-    for _ in range(4):
+    utc = utc_time - timedelta(days=1)
+    for _ in range(3):
         gc.collect()
         print(gc.mem_free())
         jd = julian.date_to_julian_day(utc.year, utc.month, utc.day)
@@ -290,42 +328,96 @@ class AstroDataComputer:
     sun_rise_set = self.events_for_current_day(local_time, sun_events)
     moon_rise_set = self.events_for_current_day(local_time, moon_events)
 
-    self._sun_local_rise_time = sun_rise_set.rise_time
-    self._sun_local_set_time = sun_rise_set.set_time
+    if is_today:
+      self._sun_rise_time = sun_rise_set.rise_time
+      self._sun_set_time = sun_rise_set.set_time
 
-    self._moon_local_rise_time = moon_rise_set.rise_time
-    self._moon_local_set_time = moon_rise_set.set_time
+      self._moon_rise_time = moon_rise_set.rise_time
+      self._moon_set_time = moon_rise_set.set_time
 
-    print("{}/{} Sun: rise {} set {}".format(local_time.month, local_time.day, self.time2str(self._sun_local_rise_time), self.time2str(self._sun_local_set_time)))
-    print("{}/{} Moon: rise {} set {}".format(local_time.month, local_time.day, self.time2str(self._moon_local_rise_time), self.time2str(self._moon_local_set_time)))
+      print("{}/{} Sun: rise {} set {}".format(local_time.month, local_time.day, self.time2str(self._sun_rise_time), self.time2str(self._sun_set_time)))
+      print("{}/{} Moon: rise {} set {}".format(local_time.month, local_time.day, self.time2str(self._moon_rise_time), self.time2str(self._moon_set_time)))
+    else:
+      self._next_moon_rise_time = moon_rise_set.rise_time
+      self._next_moon_set_time = moon_rise_set.set_time
 
   def process_moonless_hours(self, local_time: datetime):
-    pass
+    moonless_hours = 5.0
+    # When close to the new moon, let's consider we have the max amount... When not, let's compute.
+    if self._normalized_moon_age >= 3 or self._normalized_moon_age <= 25:
+      twilight = self._sun_set_time + timedelta(hours=1.5)
+
+      # Find the next moon set time after twilight
+      next_moon_set = None
+      if self._moon_set_time >= twilight:
+        next_moon_set = self._moon_set_time
+      elif self._next_moon_set_time >= twilight:
+        next_moon_set = self._next_moon_set_time
+      else:
+        print("OOPS!!!! NO NEXT MOON SET!")
+
+      # Find the next moon rise time after twilight
+      next_moon_rise = None
+      if self._moon_rise_time >= twilight:
+        next_moon_rise = self._moon_rise_time
+      elif self._next_moon_rise_time >= twilight:
+        next_moon_rise = self._next_moon_rise_time
+      else:
+        print("OOPS!!!! NO NEXT MOON RISE!")
+
+      if next_moon_set < next_moon_rise:
+        # Moon not yet set, but setting
+        extra_moonlight: timedelta = next_moon_set - twilight
+        moonless_hours = 4.5 - (extra_moonlight.total_seconds() / 3600.0)
+        pt("1tw", twilight)
+        pt("1ms", next_moon_set)
+        print("Moon not yet set, moonless=%.1f" % moonless_hours)
+      else:
+        # Moon set, but could rise
+        pt("2tw", twilight)
+        pt("2mr", next_moon_rise)
+        moonless_hours = (next_moon_rise - twilight).total_seconds() / 3600.0
+        print("Moon not yet risen, moonless=%.1f" % moonless_hours)
+
+    if moonless_hours < 0.0:
+      moonless_hours = 0.0
+    elif moonless_hours > 4.5:
+      moonless_hours = 4.5
+
+    self._moonless_hours = moonless_hours
+    self.set_moonless_hours_dial(self._moonless_hours)
 
   def process(self, now: float, local_time: datetime):
+    self.update_lunar_phase(now)
+
     if local_time.date() != self._last_full_day_process_time.date():
       self._last_full_day_process_time = local_time
 
-      self.process_rise_set(local_time)
+      self.process_rise_set(local_time, is_today=True)
+      gc.collect()
+      print(gc.mem_free())
+      self.process_rise_set(local_time + timedelta(days=1), is_today=False)
+      gc.collect()
+      print(gc.mem_free())
       self.process_moonless_hours(local_time)
-
-    self.update_lunar_phase(now)
+      gc.collect()
+      print(gc.mem_free())
 
   @property
   def moon_local_rise_time(self) -> datetime:
-      return self._moon_local_rise_time
+      return self._moon_rise_time
 
   @property
   def moon_local_set_time(self) -> datetime:
-      return self._moon_local_set_time
+      return self._moon_set_time
 
   @property
   def sun_local_rise_time(self) -> datetime:
-      return self._sun_local_rise_time
+      return self._sun_rise_time
 
   @property
   def sun_local_set_time(self) -> datetime:
-      return self._sun_local_set_time
+      return self._sun_set_time
 
 
 class Screen:
@@ -396,9 +488,11 @@ class TextDisplayScreen(Screen):
     self._num_seconds_refresh += 1
     if self._num_seconds_refresh == NUM_SECONDS_TO_RESET_DISPLAY:
       self._num_seconds_refresh = 0
+      run_gc()
       self._display.init_display()
       self._display.clear_all()
       self._display.show()
+      run_gc()
 
     self._display.display_text(3, 0, self._strings[self._current_idx])
     self._display.show()
