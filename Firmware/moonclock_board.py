@@ -15,6 +15,15 @@ from adafruit_ds3231 import DS3231
 from adafruit_bitmap_font import bitmap_font
 import time
 
+# Give us a chance to run GC on circuitpython
+try:
+    import gc
+    def run_gc():
+        gc.collect()
+except:
+    def run_gc():
+        pass
+
 try:
   import ujson as json
 except ImportError:
@@ -85,6 +94,7 @@ class MoonClock:
     self.display_cs_pin.switch_to_output(value=True)
 
     self.font = bitmap_font.load_font(FONT_FILE)
+    run_gc()
     self.display_spi = busio.SPI(board.GP2, MOSI=board.GP3)
     #self.display_spi_device = SPIDevice(self.display_spi, chip_select=self.display_cs_pin, baudrate=1000000, polarity=0, phase=0)
     self.display = CustomMatrix(spi=self.display_spi, cs=self.display_cs_pin, width=32, height=8)
@@ -92,6 +102,7 @@ class MoonClock:
     self.display.brightness(0)
     self.display.clear_all()
     self.display.show()
+    run_gc()
 
     # ADC Input 1 (for debug, not used yet)
     self.pot_adc_in = analogio.AnalogIn(board.A3)

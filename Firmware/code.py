@@ -469,7 +469,7 @@ class TextDisplayScreen(Screen):
     self._num_elements = num_elements
     self._strings: list[str] = [""] * num_elements
     self._current_idx = 0
-    self._marquee_time_seconds = 4.0
+    self._marquee_time_seconds = 2.5
 
     # Number of seconds before we force-refresh our garbage dispaly
     self._num_seconds_refresh: int = 0
