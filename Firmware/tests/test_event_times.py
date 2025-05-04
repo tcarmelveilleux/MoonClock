@@ -170,8 +170,10 @@ class TestEventTimes(unittest.TestCase):
         obs_lon = 80.4925
 
         events = []
-        for day in range(1,31):
-            jd = date_to_julian_day(2025, 3, day)
+        YEAR = 2025
+        MONTH = 4
+        for day in range(1,30):
+            jd = date_to_julian_day(YEAR, MONTH, day)
 
             object_positions = get_moon_positions_for_event(jd)
             event_times: RiseTransitSetTimes = get_event_time(jd, object_positions=object_positions, obs_lat_degrees=obs_lat, obs_lon_degrees=obs_lon)
@@ -185,9 +187,9 @@ class TestEventTimes(unittest.TestCase):
 
             timezone_delta = timedelta(hours=-5)
 
-            local_rise_hms = datetime(2015, 3, day, rise_hms.hours, rise_hms.minutes, int(rise_hms.seconds)) + timezone_delta
+            local_rise_hms = datetime(YEAR, MONTH, day, rise_hms.hours, rise_hms.minutes, int(rise_hms.seconds)) + timezone_delta
             local_rise_hms += get_dst_hours_delta(local_rise_hms, strategy="canada")
-            local_set_hms = datetime(2015, 3, day, set_hms.hours, set_hms.minutes, int(set_hms.seconds)) + timezone_delta
+            local_set_hms = datetime(YEAR, MONTH, day, set_hms.hours, set_hms.minutes, int(set_hms.seconds)) + timezone_delta
             local_set_hms += get_dst_hours_delta(local_set_hms, strategy="canada")
 
             before_str = "diff" if local_set_hms.day != local_rise_hms.day else "same"

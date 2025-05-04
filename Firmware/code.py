@@ -17,6 +17,14 @@ except:
     def run_gc():
         pass
 
+try:
+    import machine
+    def reboot():
+        machine.reset()
+except:
+    def reboot():
+        pass
+
 CHANNEL_MOON_PHASE = 0
 CHANNEL_MOONLESS_HOURS = 1
 
@@ -349,7 +357,10 @@ class AstroDataComputer:
 
       # Find the next moon set time after twilight
       next_moon_set = None
-      if self._moon_set_time >= twilight:
+      if self._moon_set_time is None:
+        # None today, use tomorrow's (for my latitude there will always be a tomorrow's set if today's is not set.)
+        next_moon_set = self._next_moon_set_time
+      elif self._moon_set_time >= twilight:
         next_moon_set = self._moon_set_time
       elif self._next_moon_set_time >= twilight:
         next_moon_set = self._next_moon_set_time
@@ -358,7 +369,9 @@ class AstroDataComputer:
 
       # Find the next moon rise time after twilight
       next_moon_rise = None
-      if self._moon_rise_time >= twilight:
+      if self._moon_rise_time is None:
+        next_moon_rise = self._next_moon_rise_time
+      elif self._moon_rise_time >= twilight:
         next_moon_rise = self._moon_rise_time
       elif self._next_moon_rise_time >= twilight:
         next_moon_rise = self._next_moon_rise_time
@@ -657,6 +670,9 @@ class MoonClockFirmware:
 
 ######################################################################
 
-firmware = MoonClockFirmware()
-while True:
-  firmware.loop()
+try:
+    firmware = MoonClockFirmware()
+    while True:
+      firmware.loop()
+except MemoryError:
+    reboot()
