@@ -8362,7 +8362,7 @@
 		(uuid "b851ef61-550a-40b6-899f-466a326b09f5")
 	)
 	(gr_text "+3.3V"
-		(at 160 77.65 0)
+		(at 158.7 77.65 0)
 		(layer "F.SilkS")
 		(uuid "0108fe52-1e6d-45d5-921e-5c302495952e")
 		(effects
