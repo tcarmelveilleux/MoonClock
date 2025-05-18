@@ -60,6 +60,22 @@
       ],
       "drc_exclusions": [
         [
+          "copper_edge_clearance|118000000|136650000|345d0d49-2599-478a-a9c2-f51ad8ee7289|f6627aa2-0c8b-4165-9743-4c5ad74bfc14",
+          "On purpose"
+        ],
+        [
+          "copper_edge_clearance|118000000|63150000|345d0d49-2599-478a-a9c2-f51ad8ee7289|87c1c306-b289-49b5-bf2a-3ba574c9f6a0",
+          "On purpose"
+        ],
+        [
+          "copper_edge_clearance|164750000|59900000|345d0d49-2599-478a-a9c2-f51ad8ee7289|53634214-d1e1-42a8-b765-3b6cdc521298",
+          "On purpose"
+        ],
+        [
+          "copper_edge_clearance|168000000|136650000|345d0d49-2599-478a-a9c2-f51ad8ee7289|913c10f3-39be-4fcc-a509-2cf0b8e687fc",
+          "On purpose"
+        ],
+        [
           "courtyards_overlap|128782500|110665000|16b7fab4-6039-45b1-948a-fad3ab2cab62|a9af8ede-8be1-4db8-8552-5a18c9cfac9c",
           "Side by side larger connector"
         ],
