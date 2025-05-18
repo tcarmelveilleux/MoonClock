@@ -135,8 +135,12 @@ class MoonClockSettings:
         self.is_test_mode = True
         channel = int(tokens[1]) % 2
         value = int(tokens[2]) % 4096
-        self.moon_clock.dac_driver.load_dac_value(channel, value)
-        self.moon_clock.dac_driver.latch_dacs()
+        # Enter interactive calibration mode with value 4095, otherwise just push value to DAC from sysex.
+        if value < 4095:
+          self.moon_clock.dac_driver.load_dac_value(channel, value)
+          self.moon_clock.dac_driver.latch_dacs()
+        else:
+          self.run_interactive_cal(channel)
 
     except Exception as e:
       debug_print('Error processing sysex "%s": %s' % (setting, e))
@@ -144,6 +148,24 @@ class MoonClockSettings:
 
     if need_save:
       self.save_settings()
+
+  def run_interactive_cal(self, channel: int):
+    """Run a loop of grabbing ADC and sending it to DAC, with printing, until set to max value."""
+    while True:
+      adc_value = 0
+      for _ in range(16):
+          adc_value += self.moon_clock.pot_adc_in.value
+      adc_value = adc_value // 16
+
+      # ADC_value always 0..65535
+      if adc_value > 65300:
+        self.is_test_mode = False
+        return
+
+      dac_value = adc_value >> 4
+      self.moon_clock.dac_driver.load_dac_value(channel, dac_value)
+      self.moon_clock.dac_driver.latch_dacs()
+      print("Channel %d DAC Value: %d" % (channel, dac_value))
 
   def load_settings(self):
     settings_dict = self.moon_clock.load_json_settings()
@@ -245,12 +267,14 @@ class AstroDataComputer:
     self.LUNAR_PHASE_UPDATE_PERIOD_SECONDS = 10.0
 
   def set_phase_dial_to_days(self, days:float):
-    # curve = [(0.0, 480.0), (1.0, 620.0), (2.0, 737.0), (3.0,  863.0), (4.0, 953.0), (5.0, 1080.0), (6, 1205.0), (7, 1315.0),
-    #          (11.0, 1725.0), (14.0, 2020.0), (16.0, 2210.0), (18.0, 2400.0), (21, 2680.0), (23.0, 2852.0), (25.0, 3030.0), (27.0, 3200.0), (28.0, 3300.0), (29.0, 3380.0)]
-    # value = int(polynomial.linear_interp_in_parts(days, curve))
+    # Values for prototype breadboard
+    # dac_value = int(polynomial.poly_eval(days, [5.046e+02, 1.174e+02, -6.444e-01]))
 
-    value = int(polynomial.poly_eval(days, [5.046e+02, 1.174e+02, -6.444e-01]))
-    self._moon_clock.dac_driver.load_dac_value(CHANNEL_MOON_PHASE, value)
+    # Values for REV1 PCB
+    dac_value = int(polynomial.poly_eval(days, [631.26, 125.6, -0.768]))
+    print("Setting moon phase days %.3f to DAC %d" % (days, dac_value))
+
+    self._moon_clock.dac_driver.load_dac_value(CHANNEL_MOON_PHASE, dac_value)
     self._moon_clock.dac_driver.latch_dacs()
 
   def set_moonless_hours_dial(self, moonless_hours: float):
@@ -406,6 +430,7 @@ class AstroDataComputer:
     if local_time.date() != self._last_full_day_process_time.date():
       self._last_full_day_process_time = local_time
 
+      gc.collect()
       self.process_rise_set(local_time, is_today=True)
       gc.collect()
       print(gc.mem_free())
@@ -674,5 +699,6 @@ try:
     firmware = MoonClockFirmware()
     while True:
       firmware.loop()
-except MemoryError:
+except MemoryError as e:
+    print("MEMORY ERROR: " + str(e))
     reboot()
