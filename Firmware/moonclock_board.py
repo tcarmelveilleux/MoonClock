@@ -5,7 +5,7 @@ from digitalio import Pull, Direction, DigitalInOut
 import microcontroller
 import keypad
 import neopixel
-import adafruit_gps
+# import adafruit_gps
 import select
 import winterbloom_smolmidi as smolmidi
 import usb_midi
@@ -119,12 +119,12 @@ class MoonClock:
     self.i2c1 = busio.I2C(self.SCL1_PIN, self.SDA1_PIN, frequency=100_000)
     self.rtc = DS3231(self.i2c1)
 
-    # GPS UART0
-    self.GPS_TX0_PIN = board.GP0
-    self.GPS_RX0_PIN = board.GP1
-    self.gps_uart = busio.UART(self.GPS_TX0_PIN, self.GPS_RX0_PIN, baudrate=9_600)
+    # # GPS UART0
+    # self.GPS_TX0_PIN = board.GP0
+    # self.GPS_RX0_PIN = board.GP1
+    # self.gps_uart = busio.UART(self.GPS_TX0_PIN, self.GPS_RX0_PIN, baudrate=9_600)
 
-    self.gps = adafruit_gps.GPS(self.gps_uart, debug=False)
+    # self.gps = adafruit_gps.GPS(self.gps_uart, debug=False)
 
     # NeoPixel
     self.neopixel = neopixel.NeoPixel(board.NEOPIXEL, 1, brightness=0.1)
