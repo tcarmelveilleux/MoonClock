@@ -3285,7 +3285,7 @@
 					)
 				)
 			)
-			(property "Footprint" "rp2040-zero:RP2040-Zero"
+			(property "Footprint" "moonclock:RP2040-Zero"
 				(at 15.494 -17.526 0)
 				(effects
 					(font
@@ -9788,7 +9788,6 @@
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "cab8b4ed-2aaf-4acd-9aa0-4da184b8c301")
 		(property "Reference" "U1"
 			(at 73.2633 81.28 0)
@@ -9800,7 +9799,7 @@
 			)
 		)
 		(property "Value" "RP2040-Zero"
-			(at 73.2633 83.82 0)
+			(at 73.406 83.312 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9815,6 +9814,7 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
+				(hide yes)
 			)
 		)
 		(property "Datasheet" ""

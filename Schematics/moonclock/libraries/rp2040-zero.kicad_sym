@@ -22,7 +22,7 @@
 				)
 			)
 		)
-		(property "Footprint" "rp2040-zero:RP2040-Zero"
+		(property "Footprint" "moonclock:RP2040-Zero"
 			(at 15.494 -17.526 0)
 			(effects
 				(font
