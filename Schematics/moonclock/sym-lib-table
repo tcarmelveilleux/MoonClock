@@ -1,6 +1,6 @@
 (sym_lib_table
   (version 7)
-  (lib (name "rp2040-zero")(type "KiCad")(uri "C:/Users/tcv/git/MoonClock/Schematics/rp2040-zero-footprint/RP2040-Zero-Kicad-main/rp2040-zero.kicad_sym")(options "")(descr ""))
+  (lib (name "rp2040-zero")(type "KiCad")(uri "${KIPRJMOD}/libraries/rp2040-zero.kicad_sym")(options "")(descr ""))
   (lib (name "bs7")(type "KiCad")(uri "${KIPRJMOD}/libraries/BS-7.kicad_sym")(options "")(descr ""))
   (lib (name "MCP47FVB22")(type "KiCad")(uri "${KIPRJMOD}/libraries/MCP47FVB22.kicad_sym")(options "")(descr ""))
   (lib (name "ECS-XTAL-moonclock")(type "KiCad")(uri "${KIPRJMOD}/libraries/ECS-.327-6-17X-C-TR.kicad_sym")(options "")(descr ""))

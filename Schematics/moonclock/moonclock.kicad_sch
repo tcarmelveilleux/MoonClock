@@ -3743,6 +3743,18 @@
 			(embedded_fonts no)
 		)
 	)
+	(text "https://github.com/tcarmelveilleux/MoonClock"
+		(exclude_from_sim no)
+		(at 179.07 178.054 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+			)
+			(justify left)
+			(href "https://github.com/tcarmelveilleux/MoonClock")
+		)
+		(uuid "3b248752-02e2-4dc2-8b64-9747d2e694af")
+	)
 	(text "Buttons"
 		(exclude_from_sim no)
 		(at 273.05 32.004 0)
@@ -3765,7 +3777,7 @@
 	)
 	(text "2"
 		(exclude_from_sim no)
-		(at 269.494 193.04 0)
+		(at 269.494 193.294 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -3796,7 +3808,7 @@
 	)
 	(text "Moon Clock\nBy Tennessee Carmel-Veilleux"
 		(exclude_from_sim no)
-		(at 179.324 173.228 0)
+		(at 179.07 172.212 0)
 		(effects
 			(font
 				(size 2.54 2.54)
